@@ -1,6 +1,6 @@
 'use strict'
 
-import { app, BrowserWindow, BrowserView } from 'electron'
+import { app, BrowserWindow, BrowserView, ipcMain } from 'electron'
 
 /**
  * Set `__static` path to static files in production
@@ -10,7 +10,8 @@ if (process.env.NODE_ENV !== 'development') {
   global.__static = require('path').join(__dirname, '/static').replace(/\\/g, '\\\\')
 }
 
-let mainWindow
+let mainWindow, browserView
+var browserViews = {}
 const winURL = process.env.NODE_ENV === 'development'
   ? `http://localhost:9080`
   : `file://${__dirname}/index.html`
@@ -22,14 +23,20 @@ function createWindow () {
   mainWindow = new BrowserWindow({
     height: 600,
     useContentSize: true,
-    width: 1000
+    width: 1000,
+    frame: false,
+    webPreferences: {
+      nodeIntegration: true,
+      enableRemoteModule: true
+    }
   })
-  let browserView = new BrowserView({ webPreferences: { nodeIntegration: false } })
+  browserView = new BrowserView({ webPreferences: { nodeIntegration: false } })
 
   mainWindow.loadURL(winURL)
   mainWindow.setBrowserView(browserView)
+  let windowSize = mainWindow.getSize()
 
-  browserView.setBounds({ x: 160, y: 0, width: 840, height: 600 })
+  browserView.setBounds({ x: 50, y: 0, width: windowSize[0] - 50, height: windowSize[1] })
   browserView.setAutoResize({ width: true, height: true, horizontal: true, vertical: true })
   browserView.webContents.loadURL('https://www.givecard.io/')
 
@@ -37,6 +44,21 @@ function createWindow () {
     mainWindow = null
   })
 }
+
+ipcMain.on('changeToTab', (event, data) => {
+  let windowSize = mainWindow.getSize()
+  if (browserViews[data] !== undefined) {
+    mainWindow.setBrowserView(browserViews[data])
+    browserViews[data].setBounds({ x: 50, y: 0, width: windowSize[0] - 50, height: windowSize[1] })
+  } else {
+    let newBrowserView = new BrowserView({ webPreferences: { nodeIntegration: false } })
+    mainWindow.setBrowserView(newBrowserView)
+    newBrowserView.setBounds({ x: 50, y: 0, width: windowSize[0] - 50, height: windowSize[1] })
+    newBrowserView.setAutoResize({ width: true, height: true, horizontal: true, vertical: true })
+    newBrowserView.webContents.loadURL(data)
+    browserViews[data] = newBrowserView
+  }
+})
 
 app.on('ready', createWindow)
 
